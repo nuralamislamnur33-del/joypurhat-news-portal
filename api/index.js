@@ -103,4 +103,4 @@ app.delete('/api/news/:id', async (req, res) => {
     } catch (err) { res.status(500).send("ডিলিট করতে সমস্যা"); }
 });
 
-app.listen(process.env.PORT || 5050, () => console.log('সার্ভার লাইভ হয়েছে!'));
+module.exports = app;
