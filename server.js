@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const fs = require('fs');
+const { Octokit } = require("@octokit/rest");
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const app = express();
+
+const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 // ১. কনফিগারেশন
 cloudinary.config({ 
@@ -13,7 +15,6 @@ cloudinary.config({
     api_secret: process.env.CLOUD_SECRET 
 });
 
-// ২. ক্লাউড স্টোরেজ সেটআপ
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: { folder: 'news_media', resource_type: 'auto' }
@@ -21,36 +22,51 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage: storage });
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // ফর্ম ডাটা রিড করার জন্য
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('.'));
 
-const DATA_FILE = './data.json';
+// গিটহাব থেকে ডেটা আনার ফাংশন
+async function getNewsFromGitHub() {
+    const { data } = await octokit.repos.getContent({
+        owner: process.env.REPO_OWNER,
+        repo: process.env.REPO_NAME,
+        path: 'data.json'
+    });
+    return JSON.parse(Buffer.from(data.content, 'base64').toString());
+}
 
-// ফাইল না থাকলে তৈরি করা
-if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+// গিটহাবে ডেটা সেভ করার ফাংশন
+async function saveToGitHub(newsData) {
+    const { data: fileData } = await octokit.repos.getContent({
+        owner: process.env.REPO_OWNER,
+        repo: process.env.REPO_NAME,
+        path: 'data.json'
+    });
+
+    await octokit.repos.createOrUpdateFileContents({
+        owner: process.env.REPO_OWNER,
+        repo: process.env.REPO_NAME,
+        path: 'data.json',
+        message: 'Update news data',
+        content: Buffer.from(JSON.stringify(newsData, null, 2)).toString('base64'),
+        sha: fileData.sha
+    });
 }
 
 // ৩. রুটসমূহ
-// নিউজ পাওয়ার রুট
-app.get('/api/news', (req, res) => {
+app.get('/api/news', async (req, res) => {
     try {
-        const news = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        // ভিউ বাড়ানো (প্রতিবার লোড হলে ভিউ ১ বাড়বে)
+        const news = await getNewsFromGitHub();
         const updatedNews = news.map(n => ({...n, views: (n.views || 0) + 1}));
-        fs.writeFileSync(DATA_FILE, JSON.stringify(updatedNews, null, 2));
+        await saveToGitHub(updatedNews);
         res.json(updatedNews);
-    } catch (err) {
-        res.status(500).send("ডাটা রিড করতে সমস্যা হয়েছে");
-    }
+    } catch (err) { res.status(500).send("ডাটা লোড করতে সমস্যা"); }
 });
 
-// নিউজ পোস্ট করার রুট
-app.post('/api/news', upload.single('media'), (req, res) => {
+app.post('/api/news', upload.single('media'), async (req, res) => {
     if (req.body.password !== process.env.ADMIN_PASS) return res.status(403).send("ভুল পাসওয়ার্ড!");
-    
     try {
-        let news = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        let news = await getNewsFromGitHub();
         news.push({
             id: Date.now(),
             title: req.body.title,
@@ -60,40 +76,31 @@ app.post('/api/news', upload.single('media'), (req, res) => {
             views: 0,
             likes: 0
         });
-        fs.writeFileSync(DATA_FILE, JSON.stringify(news, null, 2));
+        await saveToGitHub(news);
         res.redirect('/');
-    } catch (err) {
-        res.status(500).send("পোস্ট করতে সমস্যা হয়েছে");
-    }
+    } catch (err) { res.status(500).send("পোস্ট করতে সমস্যা"); }
 });
 
-// লাইক দেওয়ার রুট
-app.post('/api/update/like/:id', (req, res) => {
+app.post('/api/update/like/:id', async (req, res) => {
     try {
-        let news = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        let news = await getNewsFromGitHub();
         let post = news.find(n => n.id == req.params.id);
         if(post) {
             post.likes = (post.likes || 0) + 1;
-            fs.writeFileSync(DATA_FILE, JSON.stringify(news, null, 2));
+            await saveToGitHub(news);
         }
         res.send({ success: true });
-    } catch (err) {
-        res.status(500).send("লাইক আপডেট করতে সমস্যা হয়েছে");
-    }
+    } catch (err) { res.status(500).send("লাইক আপডেট করতে সমস্যা"); }
 });
 
-// ডিলিট করার রুট
-app.delete('/api/news/:id', (req, res) => {
+app.delete('/api/news/:id', async (req, res) => {
     if (req.body.password !== process.env.ADMIN_PASS) return res.status(403).send("ভুল পাসওয়ার্ড!");
-    
     try {
-        let news = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        let news = await getNewsFromGitHub();
         news = news.filter(n => n.id != req.params.id);
-        fs.writeFileSync(DATA_FILE, JSON.stringify(news, null, 2));
+        await saveToGitHub(news);
         res.send({ success: true });
-    } catch (err) {
-        res.status(500).send("ডিলিট করতে সমস্যা হয়েছে");
-    }
+    } catch (err) { res.status(500).send("ডিলিট করতে সমস্যা"); }
 });
 
-app.listen(process.env.PORT || 5050, () => console.log('সার্ভার চলছে http://localhost:5050'));
+app.listen(process.env.PORT || 5050, () => console.log('সার্ভার লাইভ হয়েছে!'));
