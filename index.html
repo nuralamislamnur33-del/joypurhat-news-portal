@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>জয়পুরহাট বার্তা | প্রফেশনাল নিউজ পোর্টাল</title>
+    <style>
+        :root { --red: #b71c1c; --bg: #f4f7f6; --dark: #222; }
+        body { font-family: 'Hind Siliguri', sans-serif; background: var(--bg); margin: 0; color: var(--dark); }
+        
+        header { background: #fff; padding: 30px 5%; border-bottom: 4px solid var(--red); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .logo { font-size: 40px; font-weight: 800; color: var(--red); letter-spacing: -1px; }
+        
+        .ticker { background: var(--red); color: #fff; padding: 12px; font-weight: bold; overflow: hidden; white-space: nowrap; }
+        .main-wrapper { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        
+        .news-card { background: #fff; padding: 40px; border-radius: 15px; margin-bottom: 40px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); border-top: 5px solid var(--red); }
+        .news-card h2 { font-size: 32px; margin-bottom: 15px; color: var(--dark); }
+        .news-card p { font-size: 18px; line-height: 1.8; color: #444; }
+        .meta-data { font-size: 15px; color: #666; margin-bottom: 20px; font-weight: 600; }
+        
+        img, video, audio { width: 100%; border-radius: 10px; margin: 20px 0; display: block; background: #000; }
+        
+        .action-bar { margin-top: 20px; display: flex; gap: 10px; }
+        .btn { cursor: pointer; padding: 10px 20px; border-radius: 25px; font-weight: bold; border: 1px solid #ddd; transition: 0.3s; }
+        .like-btn:hover { background: var(--red); color: #fff; }
+
+        footer { text-align: center; padding: 40px; color: #777; border-top: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">জয়পুরহাট বার্তা</div>
+    <div onclick="document.getElementById('admin-panel').style.display = (document.getElementById('admin-panel').style.display === 'block' ? 'none' : 'block');" style="cursor:pointer; font-size:20px;">☰ মেনু</div>
+</header>
+
+<div class="ticker">
+    <marquee scrollamount="8">ব্রেকিং নিউজ: জয়পুরহাটে আধুনিক প্রযুক্তিনির্ভর কৃষিব্যবস্থায় কৃষকের মুখে সফলতার হাসি!</marquee>
+</div>
+
+<div class="main-wrapper">
+    <div id="admin-panel" style="display:none; background:#fff; padding:30px; border-radius:15px; margin-bottom:40px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
+        <h3>অ্যাডমিন প্যানেল</h3>
+        <form action="/api/news" method="POST" enctype="multipart/form-data">
+            <input type="password" name="password" placeholder="পাসওয়ার্ড" required style="width:100%; padding:12px; margin-bottom:10px;">
+            <input name="title" placeholder="শিরোনাম" required style="width:100%; padding:12px; margin-bottom:10px;">
+            <textarea name="content" placeholder="বিস্তারিত..." style="width:100%; padding:12px; margin-bottom:10px;"></textarea>
+            <input type="file" name="media" style="margin-bottom:10px;">
+            <button type="submit" style="background:var(--red); color:#fff; border:none; padding:12px 30px; cursor:pointer; border-radius:5px;">প্রকাশ করুন</button>
+        </form>
+        <div id="admin-list" style="margin-top:20px;"></div>
+    </div>
+
+    <div id="news-list"></div>
+</div>
+
+<footer>
+    <p>© ২০২৩ জয়পুরহাট বার্তা | ডিজাইন ও ডেভেলপমেন্টে: <strong>নূর আলম</strong></p>
+</footer>
+
+<script>
+    async function loadData() {
+        const res = await fetch('/api/news');
+        const data = await res.json();
+        
+        document.getElementById('news-list').innerHTML = data.reverse().map(n => {
+            let mediaHtml = '';
+            if (n.media) {
+                // Cloudinary লিঙ্ক সরাসরি ব্যবহার করা হচ্ছে
+                if (n.media.includes('.mp4') || n.media.includes('.webm')) {
+                    mediaHtml = `<video src="${n.media}" controls></video>`;
+                } else if (n.media.includes('.mp3') || n.media.includes('.wav')) {
+                    mediaHtml = `<audio src="${n.media}" controls></audio>`;
+                } else {
+                    mediaHtml = `<img src="${n.media}">`;
+                }
+            }
+
+            return `
+            <div class="news-card">
+                <div class="meta-data">📅 ${n.date || 'আজ'} | 👀 ভিউ: ${n.views || 0}</div>
+                <h2>${n.title}</h2>
+                <p>${n.content}</p>
+                ${mediaHtml}
+                
+                <div class="action-bar">
+                    <div class="btn like-btn" onclick="like('${n._id}')">❤ লাইক (${n.likes || 0})</div>
+                    <div class="btn" onclick="share('${n.title}')">📤 শেয়ার</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        document.getElementById('admin-list').innerHTML = data.map(n => `
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <span>${n.title}</span> <button onclick="del('${n._id}')" style="color:red;">ডিলিট</button>
+            </div>
+        `).join('');
+    }
+
+    async function like(id) { await fetch(`/api/update/like/${id}`, {method:'POST'}); loadData(); }
+    
+    async function del(id) { 
+        let p = prompt("পাসওয়ার্ড দিন:");
+        await fetch(`/api/news/${id}`, {method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:p})});
+        loadData(); 
+    }
+
+    function share(title) {
+        if (navigator.share) { navigator.share({ title: title, url: window.location.href }); }
+        else { alert("আপনার ব্রাউজারে শেয়ার অপশন কাজ করছে না!"); }
+    }
+
+    loadData();
+</script>
+</body>
+</html>

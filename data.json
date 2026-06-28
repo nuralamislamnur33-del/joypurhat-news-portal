@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1782616571876,
+    "title": "jjhjhjjhj",
+    "content": "tdyft",
+    "media": null,
+    "date": "২৮/৬/২০২৬",
+    "views": 75,
+    "likes": 0
+  },
+  {
+    "id": 1782619170751,
+    "title": "টেস্ট ভিডিও চেক",
+    "content": "এটি একটি টেস্ট ভিডিও চেক করা হচ্ছে, সবকিছু ঠিকঠাক থাকলে এই ভিডিওটি Cloudinary-তে আপলোড হবে।",
+    "media": "https://res.cloudinary.com/dazc9gntl/video/upload/v1782619169/news_media/hbp4eqyh9ww5d5bgsuoi.mp4",
+    "date": "২৮/৬/২০২৬",
+    "views": 9,
+    "likes": 0
+  }
+]
